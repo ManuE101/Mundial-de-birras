@@ -1,0 +1,25 @@
+{
+  "id": "/",
+  "name": "Mundial de Birras",
+  "short_name": "Mundial de Birras",
+  "lang": "es-AR",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f6f4ed",
+  "theme_color": "#f6f4ed",
+  "icons": [
+    {
+      "src": "assets/app-icon.svg?v=f9b72c431b25",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icono.png?v=f9b72c431b25",
+      "sizes": "1254x1254",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
