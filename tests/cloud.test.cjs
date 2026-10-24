@@ -111,3 +111,13 @@ test('older records leave the buy-again answer unspecified', async () => {
   assert.equal(writes[0].buy_again, null);
 });
 
+test('a beer can be saved without a photo or date while keeping its zero score', async () => {
+  const { cloud, writes, uploads } = await setup();
+  const saved = await cloud.save({ ...beer, photo: null, date: null, rating: 0, style: '' });
+  assert.equal(writes[0].photo_path, null);
+  assert.equal(writes[0].date, null);
+  assert.equal(writes[0].rating, 0);
+  assert.equal(uploads.length, 0);
+  assert.equal(saved.photoPath, null);
+});
+

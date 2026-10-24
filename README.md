@@ -1,5 +1,11 @@
 # Mundial de birras
 
+## Campos obligatorios y opcionales
+
+Obligatorios: marca, nombre de la cerveza y puntaje de 0 a 10. El puntaje se ingresa explícitamente, sin un valor precargado; cero es válido. Foto, estilo, fecha, estado, recompra y notas son opcionales. **Otro** no exige escribir un estilo. La fecha propone hoy al crear, pero puede borrarse; al editar se conserva una fecha vacía. Marca + nombre siguen identificando duplicados, independientemente del estilo.
+
+Antes de publicar esta actualización ejecutar `supabase/003-optional-fields.sql` en SQL Editor. Solo quita NOT NULL a `photo_path` y `date`. El ranking y la ficha muestran estados sin foto ni fecha, y las operaciones de Storage omiten registros sin imagen. Los datos existentes se conservan.
+
 ## Últimos cambios antes de publicar
 
 Ejecutar en Supabase SQL Editor el contenido de `supabase/002-buy-again.sql` para agregar únicamente `buy_again` (boolean nullable). No hay archivado ni recuperación de eliminaciones. Los registros anteriores quedan como **Sin indicar**. No volver a ejecutar todo `setup.sql` sobre el proyecto existente para esta actualización.

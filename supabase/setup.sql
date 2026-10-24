@@ -16,13 +16,13 @@ create table if not exists public.beers (
   brand text not null check (char_length(brand) <= 80 and char_length(btrim(brand)) > 0),
   name text not null check (char_length(name) <= 100 and char_length(btrim(name)) > 0),
   style text not null default '' check (char_length(style) <= 80),
-  date date not null,
+  date date,
   rating numeric(3,1) not null check (rating between 0 and 10),
   drunk boolean,
   buy_again boolean,
   notes text not null default '' check (char_length(notes) <= 1500),
   -- Guardar la ruta, no una URL temporal: <user_id>/<archivo>.jpg
-  photo_path text not null check (
+  photo_path text check (
     split_part(photo_path, '/', 1) = user_id::text
     and char_length(split_part(photo_path, '/', 2)) > 0
   ),

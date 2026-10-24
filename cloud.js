@@ -70,26 +70,27 @@ window.BirrasCloud = (() => {
       if (page.length < 500) break;
     }
     const photos = new Map();
-    for (let i = 0; i < rows.length; i += 100) {
-      const urls = check(await bucket().createSignedUrls(rows.slice(i, i + 100).map(row => row.photo_path), 3600));
+    const photoRows = rows.filter(row => row.photo_path);
+    for (let i = 0; i < photoRows.length; i += 100) {
+      const urls = check(await bucket().createSignedUrls(photoRows.slice(i, i + 100).map(row => row.photo_path), 3600));
       urls.forEach(item => { if (item.error) throw new Error('No se pudo cargar una foto. Recargá para reintentar.'); photos.set(item.path, item.signedUrl); });
     }
     return rows.map(row => ({ id: row.id, brand: row.brand, name: row.name, style: row.style, date: row.date,
-      rating: Number(row.rating), drunk: row.drunk, buyAgain: row.buy_again, notes: row.notes, photo: photos.get(row.photo_path),
+      rating: Number(row.rating), drunk: row.drunk, buyAgain: row.buy_again, notes: row.notes, photo: photos.get(row.photo_path) || null,
       photoPath: row.photo_path, createdAt: new Date(row.created_at).getTime() }));
   }
   async function save(beer, previous) {
     requireUser();
-    let path = previous?.photoPath, uploaded = false;
-    if (beer.photo.startsWith('data:image/jpeg;base64,')) {
+    let path = previous?.photoPath || null, uploaded = false;
+    if (beer.photo?.startsWith('data:image/jpeg;base64,')) {
       const blob = await (await fetch(beer.photo)).blob();
       path = `${user.id}/${crypto.randomUUID()}.jpg`;
       check(await bucket().upload(path, blob, { contentType: 'image/jpeg', upsert: false }));
       uploaded = true;
     }
-    if (!path) throw new Error('La foto debe ser una imagen JPEG válida.');
+    if (beer.photo && !path) throw new Error('La foto debe ser una imagen JPEG válida.');
     const row = { id: beer.id, user_id: user.id, brand: beer.brand, name: beer.name, style: beer.style,
-      date: beer.date, rating: beer.rating, drunk: beer.drunk ?? null, buy_again: beer.buyAgain ?? null, notes: beer.notes, photo_path: path,
+      date: beer.date || null, rating: beer.rating, drunk: beer.drunk ?? null, buy_again: beer.buyAgain ?? null, notes: beer.notes, photo_path: path,
       created_at: new Date(beer.createdAt).toISOString() };
     try {
       check(await (previous ? client.from('beers').update(row).eq('id', beer.id) : client.from('beers').insert(row)).select('id').single());
@@ -105,12 +106,13 @@ window.BirrasCloud = (() => {
   async function remove(beer) {
     requireUser();
     check(await client.from('beers').delete().eq('id', beer.id).select('id').single());
-    await bucket().remove([beer.photoPath]).catch(() => {});
+    if (beer.photoPath) await bucket().remove([beer.photoPath]).catch(() => {});
   }
   async function backup(beers) {
     requireUser();
     const result = [];
     for (const beer of beers) {
+      if (!beer.photoPath) { const { photoPath, ...record } = beer; result.push({...record, photo: null}); continue; }
       const blob = check(await bucket().download(beer.photoPath));
       const photo = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(reader.error); reader.readAsDataURL(blob); });
       const { photoPath, ...record } = beer;

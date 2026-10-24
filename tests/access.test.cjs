@@ -8,7 +8,7 @@ function setup({ recovery = false, fail = false } = {}) {
   function element(id) {
     if (!elements.has(id)) elements.set(id, {
       hidden: id === 'app-content', value: '', textContent: '',
-      addEventListener(name, handler) { (this.listeners ||= {})[name] = handler; }, close() { this.open = false; }, showModal() { this.open = true; }, focus() {}, innerHTML: ''
+      addEventListener(name, handler) { (this.listeners ||= {})[name] = handler; }, removeAttribute(name) { delete this[name]; }, close() { this.open = false; }, showModal() { this.open = true; }, focus() {}, innerHTML: ''
     });
     return elements.get(id);
   }
@@ -66,15 +66,15 @@ test('unspecified tasting state never matches explicitly sober', () => {
   assert.equal(context.matchesFilters(beer, '', '__none__', 'unknown'), true);
   assert.equal(context.matchesFilters(beer, '', '', 'no'), false);
 });
-test('editing a custom style preserves its text and makes the field required', () => {
+test('editing a custom style preserves its text without requiring a description', () => {
   const { context, element } = setup();
   context.setFormStyle('Hazy IPA');
   assert.equal(element('style').value, '__other__');
   assert.equal(element('custom-style').value, 'Hazy IPA');
-  assert.equal(element('custom-style').required, true);
+  assert.equal(element('custom-style').required, false);
   assert.equal(context.readFormStyle(), 'Hazy IPA');
   element('custom-style').value = '   ';
-  assert.throws(() => context.readFormStyle(), /estilo/);
+  assert.equal(context.readFormStyle(), '');
 });
 test('preset matching normalizes case and hides the other field', () => {
   const { context, element } = setup();
@@ -116,6 +116,16 @@ test('detail cannot open before the app is ready', () => {
   const { context, element } = setup();
   context.openDetail('missing');
   assert.notEqual(element('beer-detail').open, true);
+});
+
+test('detail handles optional photo and date without a broken image', () => {
+  const { context, element } = setup();
+  vm.runInNewContext("loading=false; beers=[{id:'one',brand:'Marca',name:'Birra',rating:0,photo:null,date:null}];", context);
+  context.openDetail('one');
+  assert.equal(element('detail-photo').hidden, true);
+  assert.equal(element('detail-no-photo').hidden, false);
+  assert.equal(element('detail-date').textContent, 'Sin indicar');
+  assert.equal(element('detail-score').textContent, '0,0');
 });
 
 test('statistics group aliases and include zero scores in the average', () => {
