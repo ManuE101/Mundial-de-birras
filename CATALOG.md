@@ -22,4 +22,4 @@
 
 Los tests de PostgreSQL embebido verifican agrupación, búsqueda, promedios, anonimato, permisos, aislamiento entre listas y cambios de visibilidad. Los tests del cliente utilizan un DOM simulado: falta verificar el despliegue real en el navegador y Supabase.
 
-La búsqueda agrega las reseñas públicas al consultar; es adecuada para comenzar. Si crece el uso, medir consultas antes de añadir índices de búsqueda o agregados persistentes. El escaneo de etiquetas queda para la siguiente etapa: buscará coincidencias sobre este mismo catálogo, sin crear cervezas automáticamente.
+La búsqueda agrega las reseñas públicas al consultar; es adecuada para comenzar. Si crece el uso, medir consultas antes de añadir índices de búsqueda o agregados persistentes. La primera prueba de búsqueda por foto ya está implementada: lee texto localmente y permite corregirlo antes de buscar sobre este catálogo, sin crear cervezas automáticamente. Detalles y pruebas en [SCANNING.md](SCANNING.md).

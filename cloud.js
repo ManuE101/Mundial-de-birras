@@ -191,5 +191,13 @@ window.BirrasCloud = (() => {
     requireUser();
     check(await client.rpc('birras_set_wishlist',{beer_key:key,wanted}));
   }
-  return { configured, init, login, signup, logout, requestPasswordReset, updatePassword, isRecovering, list, save, remove, backup, ownProfile, publicProfile, publicProfiles, updateProfile, catalog, catalogDetail, wishlist, setWishlist };
+  async function recognizeBeer(image,signal) {
+    requireUser();const owner=user.id;
+    const {data,error}=await client.functions.invoke('recognize-beer',{body:{image},signal});
+    if(user?.id!==owner)throw new Error('La sesión cambió. Volvé a intentar.');
+    if(error){let message;try{message=(await error.context?.json())?.error;}catch{}throw new Error(message||'No pudimos conectar con el reconocimiento. Revisá que esté configurado en Supabase.');}
+    if(!data||['brand','name','style'].some(field=>typeof data[field]!=='string'))throw new Error('La respuesta del reconocimiento no es válida.');
+    return data;
+  }
+  return { configured, init, login, signup, logout, requestPasswordReset, updatePassword, isRecovering, list, save, remove, backup, ownProfile, publicProfile, publicProfiles, updateProfile, catalog, catalogDetail, wishlist, setWishlist, recognizeBeer };
 })();

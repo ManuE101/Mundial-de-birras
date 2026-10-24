@@ -1,0 +1,3 @@
+[functions.recognize-beer]
+# La función verifica el token contra Auth antes de leer la foto o llamar a Gemini.
+verify_jwt = false

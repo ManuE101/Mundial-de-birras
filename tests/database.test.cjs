@@ -25,6 +25,33 @@ async function database() {
   return db;
 }
 
+test('scan reservation requires confirmation and enforces persistent account and global quotas',async()=>{
+  const db=await database();
+  try{
+    await db.exec(fs.readFileSync('supabase/007-scan-budget.sql','utf8'));
+    await db.exec(`insert into auth.users(id,email_confirmed_at) select ('a1111111-1111-4111-8111-'||lpad(n::text,12,'0'))::uuid,case when n=6 then null else now() end from generate_series(1,6) n;`);
+    await db.exec(`set role anon;`);await assert.rejects(db.query('select public.birras_reserve_scan()'),/permission denied/);await db.exec('reset role');
+    await db.exec(`select set_config('request.jwt.claims','{"role":"authenticated","sub":"a1111111-1111-4111-8111-000000000006"}',false); set role authenticated;`);
+    await assert.rejects(db.query('select public.birras_reserve_scan()'),/insufficient_privilege/);await db.exec('reset role');
+    for(let n=1;n<=5;n++){
+      await db.exec(`select set_config('request.jwt.claims','{"role":"authenticated","sub":"a1111111-1111-4111-8111-${String(n).padStart(12,'0')}"}',false);set role authenticated;`);
+      assert.equal((await db.query('select public.birras_reserve_scan() as ok')).rows[0].ok,n<5);
+      if(n===5){await db.exec('reset role');break;}
+      assert.equal((await db.query('select public.birras_reserve_scan() as ok')).rows[0].ok,true);
+      await assert.rejects(db.query('select public.birras_reserve_scan()'),/Demasiadas/);
+      // Simular tres minutos distintos, sin esperar ni alterar el reloj.
+      await db.exec(`reset role;update birras_private.action_limits set minute_start=minute_start-interval '1 minute';set role authenticated;`);
+      await db.query('select public.birras_reserve_scan()');await db.query('select public.birras_reserve_scan()');
+      await db.exec(`reset role;update birras_private.action_limits set minute_start=minute_start-interval '1 minute';set role authenticated;`);
+      await db.query('select public.birras_reserve_scan()');await assert.rejects(db.query('select public.birras_reserve_scan()'),/Demasiadas/);
+      await assert.rejects(db.query('select * from birras_private.scan_budget'),/permission denied/);await db.exec('reset role');
+    }
+    assert.equal((await db.query('select used from birras_private.scan_budget')).rows[0].used,20);
+    await db.exec(fs.readFileSync('supabase/007-scan-budget.sql','utf8'));
+    assert.equal((await db.query('select used from birras_private.scan_budget')).rows[0].used,20);
+  }finally{await db.close();}
+});
+
 test('catalog groups beers, searches across public fields and protects wishlists and private reviews', async()=>{
   const db=await database();
   const a='a1111111-1111-4111-8111-111111111111',b='b2222222-2222-4222-8222-222222222222';

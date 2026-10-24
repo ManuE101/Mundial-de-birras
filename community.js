@@ -135,8 +135,9 @@
     if(user){try{await ownProfile();if(route().type==='profile')renderRoute(false);}catch{}}
   });
   window.addEventListener('hashchange',()=>renderRoute());
+  window.addEventListener('birras:catalog-search',()=>renderRoute());
   window.addEventListener('birras:reviews-changed',()=>{if(route().type!=='personal')renderRoute();});
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&route().type!=='personal'&&!el('profile-editor').open)renderRoute(false);});
-  setInterval(()=>{if(!document.hidden&&route().type!=='personal'&&!el('profile-editor').open)renderRoute(false);},30000);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&route().type!=='personal'&&!el('profile-editor').open&&!el('scan-dialog')?.open)renderRoute(false);});
+  setInterval(()=>{if(!document.hidden&&route().type!=='personal'&&!el('profile-editor').open&&!el('scan-dialog')?.open&&document.activeElement?.id!=='catalog-search')renderRoute(false);},30000);
   renderRoute();
 })();

@@ -48,6 +48,15 @@ test('vendored SDK matches the pinned package and HTML integrity', () => {
   const integrity='sha384-'+crypto.createHash('sha384').update(bytes).digest('base64');
   assert.ok(fs.readFileSync('index.html','utf8').includes(`integrity="${integrity}"`));
 });
+
+test('OCR assets are local and integrity-pinned; CSP permits only WebAssembly evaluation',()=>{
+  const headers=fs.readFileSync('_headers','utf8');
+  assert.match(headers,/'wasm-unsafe-eval'/);assert.doesNotMatch(headers,/'unsafe-eval'|worker-src[^;]*blob:/);
+  const bytes=fs.readFileSync('vendor/ocr/tesseract.min.js');
+  assert.equal(Buffer.compare(bytes,fs.readFileSync('node_modules/tesseract.js/dist/tesseract.min.js')),0);
+  assert.ok(fs.readFileSync('index.html','utf8').includes('integrity="sha384-'+crypto.createHash('sha384').update(bytes).digest('base64')+'"'));
+  for(const file of ['worker.min.js','spa.traineddata.gz','eng.traineddata.gz','tesseract-core-lstm.wasm.js','tesseract-core-simd-lstm.wasm.js','tesseract-core-relaxedsimd-lstm.wasm.js'])assert.ok(fs.statSync('dist/vendor/ocr/'+file).size>1000);
+});
 test('CAPTCHA uses separate fresh tokens for sign-in, registration and recovery', () => {
   const widgets=new Map([['auth-form','widget-auth'],['reset-request-form','widget-reset']]);
   const forms=new Map([...widgets.keys()].map(id=>[id,{hidden:false,querySelector(){return {};}}]));

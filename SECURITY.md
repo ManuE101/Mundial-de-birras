@@ -62,4 +62,6 @@ Referencias: https://supabase.com/docs/guides/auth/auth-captcha · https://supab
 
 ## Catálogo y pendientes
 
+El reconocimiento opcional con Gemini usa una Edge Function autenticada, clave privada en secretos del servidor y cupos persistentes de `007-scan-budget.sql`. El modo Google envía una imagen reducida y recodificada al proveedor; el modo OCR local no lo hace. El cliente no incorpora secretos ni permite URLs arbitrarias. Despliegue, controles y tratamiento de imágenes en [GEMINI-SETUP.md](GEMINI-SETUP.md).
+
 `006-catalog.sql` agrega consultas públicas sobre reseñas compartidas y una lista Por probar por usuario. La tabla de pendientes no tiene permisos directos para clientes; su RPC exige sesión confirmada, determina al dueño desde `auth.uid()` y aplica cuotas. Las reseñas privadas quedan fuera de búsqueda, promedios, opiniones y fotos públicas. Las listas públicas solo muestran fichas con reseñas públicas actuales. Detalles en [CATALOG.md](CATALOG.md).

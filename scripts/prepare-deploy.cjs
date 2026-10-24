@@ -5,7 +5,7 @@ const crypto = require('node:crypto');
 
 const root = path.resolve(__dirname, '..');
 const output = path.join(root, 'dist');
-const files = ['index.html', 'styles.css', 'app.js', 'community.js', 'catalog.js', 'cloud.js', 'config.js', 'security.js', 'captcha.js', 'pwa.js', 'sw.js', 'manifest.webmanifest', 'offline.html', '_headers'];
+const files = ['index.html', 'styles.css', 'app.js', 'community.js', 'catalog.js', 'scanner.js', 'cloud.js', 'config.js', 'security.js', 'captcha.js', 'pwa.js', 'sw.js', 'manifest.webmanifest', 'offline.html', '_headers'];
 const assets = ['icono.png', 'app-icon.svg'];
 const configContext = { window: {} };
 vm.runInNewContext(fs.readFileSync(path.join(root, 'config.js'), 'utf8'), configContext);
@@ -24,9 +24,27 @@ fs.mkdirSync(path.join(root, 'vendor'), { recursive: true });
 fs.copyFileSync(sdkSource, path.join(root, 'vendor/supabase.js'));
 fs.copyFileSync(path.join(root, 'node_modules/@supabase/supabase-js/LICENSE'), path.join(root, 'vendor/LICENSE-supabase'));
 const sdkIntegrity = 'sha384-' + crypto.createHash('sha384').update(fs.readFileSync(sdkSource)).digest('base64');
+// OCR local; las fotos nunca salen del dispositivo.
+const ocrFiles = {
+  'tesseract.min.js':'tesseract.js/dist/tesseract.min.js',
+  'worker.min.js':'tesseract.js/dist/worker.min.js',
+  'LICENSE-tesseract':'tesseract.js/LICENSE.md',
+  'LICENSE-core':'tesseract.js-core/LICENSE',
+  'NOTICE-tesseract':'tesseract.js/dist/tesseract.min.js.LICENSE.txt',
+  'NOTICE-worker':'tesseract.js/dist/worker.min.js.LICENSE.txt',
+  'spa.traineddata.gz':'@tesseract.js-data/spa/4.0.0_best_int/spa.traineddata.gz',
+  'eng.traineddata.gz':'@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz'
+};
+for(const variant of ['lstm','simd-lstm','relaxedsimd-lstm'])ocrFiles[`tesseract-core-${variant}.wasm.js`]=`tesseract.js-core/tesseract-core-${variant}.wasm.js`;
+for(const name of ['tesseract.js','@tesseract.js-data/spa','@tesseract.js-data/eng']) {
+  if(require('../package.json').dependencies[name]!==require(path.join(root,'node_modules',name,'package.json')).version)throw new Error('Ejecutá npm ci para instalar las versiones fijadas del lector.');
+}
+fs.mkdirSync(path.join(root,'vendor/ocr'),{recursive:true});
+for(const [target,source] of Object.entries(ocrFiles))fs.copyFileSync(path.join(root,'node_modules',source),path.join(root,'vendor/ocr',target));
+const ocrIntegrity='sha384-'+crypto.createHash('sha384').update(fs.readFileSync(path.join(root,'vendor/ocr/tesseract.min.js'))).digest('base64');
 const offlineStyle = fs.readFileSync(path.join(root, 'offline.html'), 'utf8').match(/<style>([\s\S]*?)<\/style>/)?.[1];
 const styleHash = crypto.createHash('sha256').update(offlineStyle || '').digest('base64');
-const policy = `default-src 'none'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'sha256-${styleHash}'; img-src 'self' data: blob: ${project.origin}; font-src 'self'; connect-src 'self' ${project.origin} https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; worker-src 'self'; manifest-src 'self'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests`;
+const policy = `default-src 'none'; script-src 'self' 'wasm-unsafe-eval' https://challenges.cloudflare.com; style-src 'self' 'sha256-${styleHash}'; img-src 'self' data: blob: ${project.origin}; font-src 'self'; connect-src 'self' ${project.origin} https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; worker-src 'self'; manifest-src 'self'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests`;
 fs.writeFileSync(path.join(root, '_headers'), `/*\n  Content-Security-Policy: ${policy}\n  X-Content-Type-Options: nosniff\n  X-Frame-Options: DENY\n  Referrer-Policy: no-referrer\n  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()\n  Strict-Transport-Security: max-age=31536000\n  Cache-Control: no-cache\n/\n  Cache-Control: no-store\n/index.html\n  Cache-Control: no-store\n/config.js\n  Cache-Control: no-store\n/sw.js\n  Cache-Control: no-store\n  Service-Worker-Allowed: /\n`);
 // Regenerar el contenedor al reemplazar el PNG y cambiar su URL para evitar cachés viejas.
 const icon = fs.readFileSync(path.join(root, 'assets', 'icono.png'));
@@ -46,8 +64,9 @@ fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
 const htmlPath = path.join(root, 'index.html');
 fs.writeFileSync(htmlPath, fs.readFileSync(htmlPath, 'utf8')
   .replace(/assets\/icono\.png(?:\?v=[a-f0-9]+)?/g, `assets/icono.png?v=${iconVersion}`)
+  .replace(/<script src="vendor\/ocr\/tesseract.min.js"[^>]*>/, `<script src="vendor/ocr/tesseract.min.js" integrity="${ocrIntegrity}" defer>`)
   .replace(/<script src="vendor\/supabase\.js"[^>]*>/, `<script src="vendor/supabase.js" integrity="${sdkIntegrity}" defer>`));
-for (const file of ['app.js', 'community.js', 'catalog.js', 'cloud.js', 'config.js', 'security.js', 'captcha.js', 'pwa.js', 'sw.js']) {
+for (const file of ['app.js', 'community.js', 'catalog.js', 'scanner.js', 'cloud.js', 'config.js', 'security.js', 'captcha.js', 'pwa.js', 'sw.js']) {
   new vm.Script(fs.readFileSync(path.join(root, file), 'utf8'), { filename: file });
 }
 if (fs.existsSync(output)) {
@@ -62,6 +81,9 @@ if (unexpectedAssets.length) throw new Error('Revisá los archivos adicionales e
 for (const file of assets) fs.copyFileSync(path.join(root, 'assets', file), path.join(output, 'assets', file));
 fs.mkdirSync(path.join(output, 'vendor'), { recursive: true });
 const vendorFiles = ['supabase.js', 'LICENSE-supabase'];
-if (fs.readdirSync(path.join(output, 'vendor')).some(file => !vendorFiles.includes(file))) throw new Error('Revisá los archivos adicionales de dist/vendor.');
+if (fs.readdirSync(path.join(output, 'vendor')).some(file => !vendorFiles.includes(file) && file!=='ocr')) throw new Error('Revisá los archivos adicionales de dist/vendor.');
 for (const file of vendorFiles) fs.copyFileSync(path.join(root, 'vendor', file), path.join(output, 'vendor', file));
+fs.mkdirSync(path.join(output,'vendor/ocr'),{recursive:true});
+if(fs.readdirSync(path.join(output,'vendor/ocr')).some(file=>!Object.hasOwn(ocrFiles,file)))throw new Error('Revisá los archivos adicionales de dist/vendor/ocr.');
+for(const file of Object.keys(ocrFiles))fs.copyFileSync(path.join(root,'vendor/ocr',file),path.join(output,'vendor/ocr',file));
 console.log('Listo: dist incluye la app, los íconos y los archivos para instalarla. Subir al proyecto Netlify existente.');

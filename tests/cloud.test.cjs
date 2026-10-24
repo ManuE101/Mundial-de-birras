@@ -3,8 +3,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
-async function setup({ failWrite = false, resetError = null, updateError = null, recoveryHash = '' } = {}) {
-  const uploads = [], removals = [], writes = [];
+async function setup({ failWrite = false, resetError = null, updateError = null, recoveryHash = '', recognitionError = null } = {}) {
+  const uploads = [], removals = [], writes = [], scans=[];
   const resets = [], updates = [], notifications = [];
   let authCallback;
   const storage = {
@@ -19,6 +19,7 @@ async function setup({ failWrite = false, resetError = null, updateError = null,
     single: async () => failWrite ? { error: { code: '23505' } } : { data: { id: '11111111-1111-4111-8111-111111111111' } }
   };
   const client = {
+    functions:{invoke:async(name,options)=>{scans.push({name,options});return {data:{brand:'Brahma',name:'Pomelo',style:''},error:recognitionError};}},
     auth: {
       onAuthStateChange(callback) { authCallback = callback; },
       getSession: async () => ({ data: { session: { user: { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' } } } }),
@@ -35,8 +36,19 @@ async function setup({ failWrite = false, resetError = null, updateError = null,
   vm.runInNewContext(source, context);
   const cloud = context.window.BirrasCloud;
   await cloud.init(() => {}, value => notifications.push(value));
-  return { cloud, uploads, removals, writes, resets, updates, notifications, emit: (event, session) => authCallback(event, session) };
+  return { cloud, uploads, removals, writes, resets, updates, notifications, scans, emit: (event, session) => authCallback(event, session) };
 }
+
+test('vision uses authenticated Supabase function, passes cancellation and rejects signed-out scans',async()=>{
+  const {cloud,scans,emit}=await setup();const controller=new AbortController();
+  assert.equal((await cloud.recognizeBeer('jpeg',controller.signal)).brand,'Brahma');
+  assert.equal(scans[0].name,'recognize-beer');assert.equal(scans[0].options.signal,controller.signal);assert.equal(scans[0].options.body.image,'jpeg');
+  emit('SIGNED_OUT',null);await assert.rejects(cloud.recognizeBeer('jpeg'),/Iniciá sesión/);assert.equal(scans.length,1);
+});
+test('vision displays safe backend quota messages',async()=>{
+  const {cloud}=await setup({recognitionError:{context:Response.json({error:'Se agotó el cupo de prueba de hoy.'})}});
+  await assert.rejects(cloud.recognizeBeer('jpeg'),/agotó el cupo/);
+});
 const beer = { id: '11111111-1111-4111-8111-111111111111', brand: 'Marca', name: 'Variedad', style: '', date: '2026-10-21', rating: 0,
   drunk: false, buyAgain: false, notes: '', photo: 'data:image/jpeg;base64,/9j/2Q==', createdAt: 1792540800000 };
 

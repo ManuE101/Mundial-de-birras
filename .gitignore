@@ -1,3 +1,7 @@
 dist/
 .netlify/
 node_modules/
+.env
+.env.*
+!.env.example
+supabase/functions/.env

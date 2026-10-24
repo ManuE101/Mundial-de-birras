@@ -35,11 +35,17 @@ window.BirrasCatalog = (() => {
       count=data.items.length;total=Number(data.total);
       if(offset>=total&&offset){refresh(0);return;}
       const heading=page.type==='wishlist'?`<a class="back-link" href="#/perfil/${encodeURIComponent(page.username)}">← @${esc(page.username)}</a><h1>Por probar</h1><p>Las birras que @${esc(page.username)} tiene pendientes.</p>`:`<h1>Catálogo</h1><p>Las birras que compartimos, con el puntaje de todos.</p><form id="catalog-search-form" class="public-search"><label for="catalog-search">Buscar birra</label><div><input id="catalog-search" type="search" maxlength="120" value="${esc(search)}" placeholder="Marca, nombre, estilo, opinión, usuario…"><button class="primary" type="submit">Buscar</button></div><p class="field-help">Podés combinar palabras de distintos campos.</p></form>`;
-      frame(`${heading}${count?cards(data.items):`<p class="public-empty">${page.type==='wishlist'?'Todavía no hay birras pendientes con reseñas públicas.':search?'No encontramos birras con esos datos.':'Todavía no hay birras publicadas.'}</p>`}${pagination(offset,count,total)}`);
+      frame(`${heading}${page.type==='catalog'?'<button id="catalog-scan" class="text-button" type="button">Buscar por foto</button>':''}${count?cards(data.items):`<p class="public-empty">${page.type==='wishlist'?'Todavía no hay birras pendientes con reseñas públicas.':search?'No encontramos birras con esos datos.':'Todavía no hay birras publicadas.'}</p>`}${pagination(offset,count,total)}`);
+      if(page.type==='catalog')el('catalog-scan').addEventListener('click',()=>window.BirrasScanner.open());
       el('catalog-search-form')?.addEventListener('submit',event=>{event.preventDefault();search=el('catalog-search').value.trim();refresh(0);});
     }
     el('catalog-next')?.addEventListener('click',()=>refresh(offset+20));
     el('catalog-previous')?.addEventListener('click',()=>refresh(Math.max(0,offset-20)));
   }
-  return {render};
+  function find(value) {
+    search=String(value||'').trim().slice(0,120);
+    if(window.location.hash==='#/catalogo')window.dispatchEvent(new CustomEvent('birras:catalog-search'));
+    else window.location.hash='/catalogo';
+  }
+  return {render,find};
 })();
