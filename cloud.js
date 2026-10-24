@@ -24,7 +24,8 @@ window.BirrasCloud = (() => {
     let remembered = false;
     try { remembered = sessionStorage.getItem(recoveryKey) === '1'; } catch {}
     rememberRecovery(incomingRecovery || remembered);
-    const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/+esm');
+    const createClient = window.supabase?.createClient;
+    if (!createClient) throw new Error('No se pudo cargar la conexión. Recargá la app.');
     client = createClient(config.supabaseUrl, config.supabasePublishableKey);
     // El callback no realiza llamadas a Supabase mientras el SDK procesa el evento.
     let previous;
@@ -46,17 +47,19 @@ window.BirrasCloud = (() => {
     previous = user?.id;
     return user;
   }
-  async function login(email, password) { check(await client.auth.signInWithPassword({ email, password })); }
-  async function signup(email, password) {
-    return check(await client.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin } }));
+  async function login(email, password, captchaToken) { check(await client.auth.signInWithPassword({ email, password, options: { captchaToken } })); }
+  async function signup(email, password, captchaToken) {
+    if (password.length < 8) throw new Error('Usá al menos 8 caracteres.');
+    return check(await client.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin, captchaToken } }));
   }
   async function logout() { check(await client.auth.signOut()); }
-  async function requestPasswordReset(email) {
-    check(await client.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin }));
+  async function requestPasswordReset(email, captchaToken) {
+    check(await client.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin, captchaToken }));
   }
   async function updatePassword(password) {
     requireUser();
     if (!recovering) throw new Error('Abrí el enlace de recuperación que recibiste por email.');
+    if (password.length < 8) throw new Error('Usá al menos 8 caracteres.');
     check(await client.auth.updateUser({ password }));
     rememberRecovery(false);
   }
@@ -72,26 +75,29 @@ window.BirrasCloud = (() => {
     const photos = new Map();
     const photoRows = rows.filter(row => row.photo_path);
     for (let i = 0; i < photoRows.length; i += 100) {
-      const urls = check(await bucket().createSignedUrls(photoRows.slice(i, i + 100).map(row => row.photo_path), 3600));
+      const urls = check(await bucket().createSignedUrls(photoRows.slice(i, i + 100).map(row => row.photo_path), 300));
       urls.forEach(item => { if (item.error) throw new Error('No se pudo cargar una foto. Recargá para reintentar.'); photos.set(item.path, item.signedUrl); });
     }
     return rows.map(row => ({ id: row.id, brand: row.brand, name: row.name, style: row.style, date: row.date,
-      rating: Number(row.rating), drunk: row.drunk, buyAgain: row.buy_again, notes: row.notes, photo: photos.get(row.photo_path) || null,
+      rating: Number(row.rating), isPublic: row.is_public !== false, drunk: row.drunk, buyAgain: row.buy_again, notes: row.notes, photo: photos.get(row.photo_path) || null,
       photoPath: row.photo_path, createdAt: new Date(row.created_at).getTime() }));
   }
   async function save(beer, previous) {
     requireUser();
+    window.BirrasSecurity.validateBeer(beer);
+    if (previous?.photoPath && !window.BirrasSecurity.ownsPhoto(previous.photoPath, user.id)) throw new Error('La foto no pertenece a esta cuenta.');
     let path = previous?.photoPath || null, uploaded = false;
     if (beer.photo?.startsWith('data:image/jpeg;base64,')) {
-      const blob = await (await fetch(beer.photo)).blob();
+      const blob = await window.BirrasSecurity.jpegBlob(beer.photo);
       path = `${user.id}/${crypto.randomUUID()}.jpg`;
       check(await bucket().upload(path, blob, { contentType: 'image/jpeg', upsert: false }));
       uploaded = true;
     }
     if (beer.photo && !path) throw new Error('La foto debe ser una imagen JPEG válida.');
     const row = { id: beer.id, user_id: user.id, brand: beer.brand, name: beer.name, style: beer.style,
-      date: beer.date || null, rating: beer.rating, drunk: beer.drunk ?? null, buy_again: beer.buyAgain ?? null, notes: beer.notes, photo_path: path,
+      date: beer.date || null, rating: beer.rating, is_public: beer.isPublic !== false, drunk: beer.drunk ?? null, buy_again: beer.buyAgain ?? null, notes: beer.notes, photo_path: path,
       created_at: new Date(beer.createdAt).toISOString() };
+    if (previous) delete row.created_at;
     try {
       check(await (previous ? client.from('beers').update(row).eq('id', beer.id) : client.from('beers').insert(row)).select('id').single());
     } catch (error) {
@@ -106,7 +112,7 @@ window.BirrasCloud = (() => {
   async function remove(beer) {
     requireUser();
     check(await client.from('beers').delete().eq('id', beer.id).select('id').single());
-    if (beer.photoPath) await bucket().remove([beer.photoPath]).catch(() => {});
+    if (beer.photoPath && window.BirrasSecurity.ownsPhoto(beer.photoPath, user.id)) await bucket().remove([beer.photoPath]).catch(() => {});
   }
   async function backup(beers) {
     requireUser();
@@ -120,5 +126,70 @@ window.BirrasCloud = (() => {
     }
     return result;
   }
-  return { configured, init, login, signup, logout, requestPasswordReset, updatePassword, isRecovering, list, save, remove, backup };
+  async function signPhotos(paths) {
+    const unique = [...new Set(paths.filter(Boolean))];
+    if (!unique.length) return new Map();
+    const results = check(await bucket().createSignedUrls(unique, 300));
+    return new Map(results.filter(item => !item.error && item.signedUrl).map(item => [item.path,item.signedUrl]));
+  }
+  async function ownProfile() {
+    requireUser();
+    return check(await client.from('profiles').select('user_id,username,avatar_path,created_at').eq('user_id',user.id).single());
+  }
+  async function publicProfile(username, offset = 0) {
+    const data = check(await client.rpc('birras_public_profile',{profile_name:username,page_offset:offset}));
+    if (!data) return null;
+    const urls = await signPhotos([data.avatar_path,...data.reviews.map(review => review.photo_path)]);
+    return {...data,avatar:urls.get(data.avatar_path) || null,reviews:data.reviews.map(review => ({...review,photo:urls.get(review.photo_path) || null}))};
+  }
+  async function publicProfiles(search = '', after = '') {
+    if (!search.trim()) return [];
+    const profiles = check(await client.rpc('birras_public_profiles',{search_name:search,after_name:after}));
+    const urls = await signPhotos(profiles.map(profile => profile.avatar_path));
+    return profiles.map(profile => ({...profile,avatar:urls.get(profile.avatar_path) || null}));
+  }
+  async function updateProfile({username,photo = null,removeAvatar = false}) {
+    requireUser();
+    username = username.trim().toLowerCase();
+    if (!/^[a-z0-9_]{3,40}$/.test(username)) throw new Error('Usá entre 3 y 40 letras sin acentos, números o guiones bajos.');
+    const owner = user.id, previous = await ownProfile();
+    let path = removeAvatar ? null : previous.avatar_path, uploaded = false;
+    if (photo) {
+      const blob = await window.BirrasSecurity.jpegBlob(photo);
+      path = `${owner}/${crypto.randomUUID()}.jpg`;
+      check(await bucket().upload(path,blob,{contentType:'image/jpeg',upsert:false})); uploaded = true;
+    }
+    if (user?.id !== owner) { if (uploaded) await bucket().remove([path]); throw new Error('La sesión cambió. Volvé a intentarlo.'); }
+    try {
+      check(await client.from('profiles').update({username,avatar_path:path}).eq('user_id',owner).select('username').single());
+    } catch(error) {
+      if (uploaded) await bucket().remove([path]);
+      if (error.code === '23505') throw new Error('Ese nombre de usuario ya está ocupado. Probá otro.');
+      throw error;
+    }
+    if ((uploaded || removeAvatar) && previous.avatar_path && window.BirrasSecurity.ownsPhoto(previous.avatar_path,owner)) await bucket().remove([previous.avatar_path]).catch(() => {});
+    return {username,avatar_path:path};
+  }
+  async function catalogItems(method, args) {
+    const data = check(await client.rpc(method,args));
+    const urls = await signPhotos(data.items.map(item => item.photo_path));
+    return {...data,items:data.items.map(item => ({...item,photo:urls.get(item.photo_path)||null}))};
+  }
+  function catalog(search = '', offset = 0) {
+    return catalogItems('birras_catalog',{search_text:search,page_offset:offset});
+  }
+  function wishlist(username, offset = 0) {
+    return catalogItems('birras_wishlist',{profile_name:username,page_offset:offset});
+  }
+  async function catalogDetail(key, offset = 0) {
+    const data = check(await client.rpc('birras_catalog_detail',{beer_key:key,page_offset:offset}));
+    if (!data) return null;
+    const urls = await signPhotos([data.photo_path,...data.reviews.map(item => item.photo_path)]);
+    return {...data,photo:urls.get(data.photo_path)||null,reviews:data.reviews.map(item => ({...item,photo:urls.get(item.photo_path)||null}))};
+  }
+  async function setWishlist(key,wanted) {
+    requireUser();
+    check(await client.rpc('birras_set_wishlist',{beer_key:key,wanted}));
+  }
+  return { configured, init, login, signup, logout, requestPasswordReset, updatePassword, isRecovering, list, save, remove, backup, ownProfile, publicProfile, publicProfiles, updateProfile, catalog, catalogDetail, wishlist, setWishlist };
 })();

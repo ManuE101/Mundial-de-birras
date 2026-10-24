@@ -233,8 +233,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .insight-row-heading > span { overflow-wrap: anywhere; min-width: 0; }
 .insight-row-heading strong { white-space: nowrap; font-weight: 600; font-variant-numeric: tabular-nums; }
 .insight-row-heading small { font-weight: 400; color: var(--muted); font-size: 10px; }
-.insight-bar { height: 5px; background: #e0e4dc; margin-top: 9px; }
-.insight-bar > span { display: block; height: 100%; background: #688b9b; }
+.insight-bar { display: block; width: 100%; height: 5px; border: 0; appearance: none; background: #e0e4dc; margin-top: 9px; }
+.insight-bar::-webkit-meter-bar { height: 5px; border: 0; border-radius: 0; background: #e0e4dc; }
+.insight-bar::-webkit-meter-optimum-value { background: #688b9b; }
+.insight-bar::-moz-meter-bar { background: #688b9b; }
+.captcha-widget:empty { display: none; }
+.captcha-widget { width: 100%; margin-top: 14px; min-width: 0; }
 .insight-row p { font-size: 11px; color: var(--muted); margin: 6px 0 0; }
 .insight-no-data { opacity: .75; }
 .insight-footnote { color: var(--muted); font-size: 11px; line-height: 1.7; margin-top: 22px; }
@@ -257,6 +261,85 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .photo-placeholder { display: grid; place-items: center; font-size: 11px; color: var(--muted); text-align: center; }
 .detail-no-photo { padding: 45px 20px; background: #e9ede7; color: var(--muted); text-align: center; border-radius: 4px; font-size: 13px; }
 .rating-input { font-variant-numeric: tabular-nums; }
+.main-nav { display: flex; align-items: center; gap: 22px; font-size: 13px; }
+.main-nav a { text-decoration: none; padding: 10px 0; }
+.main-nav a:hover, .main-nav a[aria-current] { text-decoration: underline; text-underline-offset: 6px; }
+.field-help { display: block; color: var(--muted); font-size: 12px; font-weight: 400; line-height: 1.7; margin-top: 8px; }
+.visibility-badge { display: inline-block; margin-left: 7px !important; font-size: 10px !important; color: var(--muted); }
+body[data-public-view] #account, body[data-public-view] #app-content { display: none !important; }
+.public-content { padding: 38px 0 55px; min-height: 55vh; }
+.public-heading h1 { margin-bottom: 12px; }
+.public-heading p, .public-profile-heading p, .public-loading, .public-empty { color: var(--muted); font-size: 14px; }
+.public-search { max-width: 500px; margin: 28px 0; }
+.public-search > div { display: flex; gap: 10px; align-items: end; }
+.profile-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 18px; margin: 28px 0; }
+.profile-card { display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--line); padding: 20px 0; text-decoration: none; min-width: 0; }
+.profile-card strong { font-size: 14px; overflow-wrap: anywhere; min-width: 0; }
+.profile-card:hover strong { text-decoration: underline; }
+.public-avatar { display: block; width: 55px; height: 55px; object-fit: cover; border-radius: 50%; flex-shrink: 0; background: #e4e7e0; }
+.avatar-letter { display: grid; place-items: center; font-size: 22px; color: var(--accent); }
+.public-avatar.large { width: 90px; height: 90px; font-size: 35px; }
+.public-profile-heading { display: flex; align-items: center; gap: 22px; margin: 30px 0; }
+.public-profile-heading h1 { font-size: 34px; margin: 0 0 10px; overflow-wrap: anywhere; }
+.public-profile-heading > div { min-width: 0; }
+.public-profile-heading p { margin: 0; font-size: 12px; }
+.public-profile-heading .text-button { margin-left: auto; flex-shrink: 0; }
+.public-profile-stats { display: flex; gap: 50px; padding: 24px 0; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--line); margin-bottom: 35px; }
+.public-profile-stats span { display: block; color: var(--muted); font-size: 12px; }
+.public-profile-stats strong { display: block; font-size: 30px; font-weight: 600; margin-top: 7px; }
+.public-review { display: grid; grid-template-columns: 140px minmax(0,1fr); gap: 25px; padding: 26px 0; border-bottom: 1px solid var(--line); }
+.public-review > img, .public-review-no-photo { width: 140px; height: 160px; object-fit: contain; background: #e9ede7; border-radius: 4px; }
+.public-review-no-photo { display: grid; place-items: center; font-size: 12px; color: var(--muted); }
+.public-review-heading { display: flex; justify-content: space-between; gap: 20px; }
+.public-review-heading h3 { margin-bottom: 10px; font-size: 22px; overflow-wrap: anywhere; }
+.public-review-heading .eyebrow { margin: 0 0 5px; overflow-wrap: anywhere; }
+.public-score { font-size: 27px; white-space: nowrap; font-weight: 600; }
+.public-score small { font-size: 11px; font-weight: 400; color: var(--muted); }
+.public-review-meta { font-size: 12px; color: var(--muted); }
+.public-review-notes { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; font-size: 14px; }
+.public-review .buy-again-note { font-size: 12px; color: var(--accent); }
+.public-pagination { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-top: 25px; font-size: 12px; color: var(--muted); }
+.back-link { font-size: 13px; text-underline-offset: 4px; }
+.profile-photo-field { margin-top: 24px; }
+.profile-photo-field > label { display: block; margin-bottom: 10px; }
+#profile-photo { display: block; width: 100%; max-width: 100%; min-height: 46px; font-size: 12px; color: var(--muted); }
+#profile-photo::file-selector-button { min-height: 44px; margin-right: 12px; padding: 10px 14px; border: 1px solid #bbc5c6; border-radius: 4px; background: var(--white); color: var(--ink); font: inherit; cursor: pointer; }
+#profile-photo::file-selector-button:hover { background: #e9ede7; }
+.profile-photo-preview { display: flex; align-items: center; gap: 18px; margin-top: 14px; }
+.profile-photo-preview:has(img[hidden]) { display: none; }
+.avatar-preview { display: block; width: 96px; height: 96px; object-fit: cover; border-radius: 50%; flex-shrink: 0; }
+#profile-error { font-size: 13px; color: #963e2d; line-height: 1.7; }
+@media (max-width: 760px) {
+  header { flex-wrap: wrap; gap: 8px; padding-block: 20px 10px; }
+  .main-nav { width: 100%; justify-content: space-between; gap: 12px; font-size: 12px; }
+  .main-nav .text-button { font-size: 12px; }
+  .profile-grid { grid-template-columns: 1fr; gap: 0; }
+  .public-profile-heading { flex-wrap: wrap; gap: 15px; }
+  .public-profile-heading h1 { font-size: 25px; }
+  .public-profile-heading > div { flex: 1; }
+  .public-profile-heading .text-button { margin: 0; }
+  .public-avatar.large { width: 65px; height: 65px; }
+  .public-review { grid-template-columns: 80px minmax(0,1fr); gap: 15px; }
+  .public-review > img, .public-review-no-photo { width: 80px; height: 110px; }
+  .public-review-heading { gap: 10px; }
+  .public-review-heading h3 { font-size: 18px; }
+  .public-score { font-size: 23px; }
+  .public-score small { display: block; text-align: right; }
+  .public-search input { min-width: 0; }
+}
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; scroll-behavior: auto !important; }
 }
+/* Catálogo compartido: las mismas superficies y tipografía del ranking. */
+.catalog-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:28px;margin:32px 0}
+.catalog-card{display:flex;gap:20px;padding:24px 0;border-top:1px solid var(--line,#d5d9d2);color:inherit;text-decoration:none}
+.catalog-card>img,.catalog-card>.public-review-no-photo{width:88px;height:126px;object-fit:contain;flex-shrink:0}
+.catalog-card h2{font-size:1.35rem;margin:5px 0 12px}
+.catalog-card p{margin:7px 0}
+.catalog-card:hover h2{text-decoration:underline;text-underline-offset:4px}
+.catalog-detail{display:grid;grid-template-columns:minmax(120px,260px) 1fr;gap:40px;margin:30px 0 50px}
+.catalog-detail>img,.catalog-detail>.public-review-no-photo{width:100%;height:300px;object-fit:contain}
+.catalog-detail .public-profile-stats{flex-wrap:wrap}
+.catalog-detail .public-profile-stats small{font-size:.8rem;display:block;font-weight:normal}
+.wishlist-profile-link{display:inline-block;margin:0 0 30px;text-underline-offset:4px}
+@media(max-width:600px){.catalog-detail{grid-template-columns:1fr;gap:24px}.catalog-detail>img,.catalog-detail>.public-review-no-photo{height:200px}.main-nav{flex-wrap:wrap}}

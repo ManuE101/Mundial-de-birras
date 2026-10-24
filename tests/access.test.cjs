@@ -8,16 +8,18 @@ function setup({ recovery = false, fail = false } = {}) {
   function element(id) {
     if (!elements.has(id)) elements.set(id, {
       hidden: id === 'app-content', value: '', textContent: '',
-      addEventListener(name, handler) { (this.listeners ||= {})[name] = handler; }, removeAttribute(name) { delete this[name]; }, close() { this.open = false; }, showModal() { this.open = true; }, focus() {}, innerHTML: ''
+      addEventListener(name, handler) { (this.listeners ||= {})[name] = handler; }, removeAttribute(name) { delete this[name]; }, close() { this.open = false; }, showModal() { this.open = true; }, focus() {}, reset() {}, innerHTML: ''
     });
     return elements.get(id);
   }
   let reads = 0;
   const context = {
+    window: {}, URL, Blob, atob,
     document: { getElementById: element, addEventListener() {}, body: { classList: { toggle() {} } } },
     BirrasCloud: { isRecovering: () => recovery, list: async () => { reads++; if (fail) throw new Error('offline'); return []; } },
     setInterval() {}, clearTimeout() {}, setTimeout() { return 1; }
   };
+  vm.runInNewContext(fs.readFileSync('security.js', 'utf8'), context);
   const source = fs.readFileSync('app.js', 'utf8').replace(/ init\(\);\s*$/, '');
   vm.runInNewContext(source, context);
   vm.runInNewContext('cloudMode = true;', context);

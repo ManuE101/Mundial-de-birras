@@ -3,6 +3,7 @@ const $ = id => document.getElementById(id);
 let cloudMode = false, sessionUser = null, loading = true, sessionVersion = 0;
 let duplicateId = null;
 let detailBeerId = null, detailTrigger = null;
+let photoVersion = 0;
 let beers = [], db, editing = null, currentPhoto = null, photoTask = Promise.resolve();
 const normalize = value => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toLowerCase();
 const key = beer => `${normalize(beer.brand)}|${normalize(beer.name)}`;
@@ -20,8 +21,18 @@ function setReady(ready) {
  document.body.classList.toggle('auth-view', $('app-content').hidden);
  $('storage-note').hidden = $('app-content').hidden;
 }
+function notifyCommunity() {
+ window.dispatchEvent?.(new CustomEvent('birras:session',{detail:{user:sessionUser,recovering:BirrasCloud.isRecovering()}}));
+}
 async function loadSession(user) {
- if (user?.id !== sessionUser?.id) clearFilters(false);
+ if (user?.id !== sessionUser?.id) {
+   clearFilters(false); photoVersion++; currentPhoto = null;
+   $('beer-form').reset(); $('preview').removeAttribute('src'); $('preview').hidden = true;
+   $('detail-photo').removeAttribute('src');
+   ['detail-brand','detail-title','detail-notes','detail-score','detail-position','detail-style','detail-date','detail-state','detail-joke','detail-buy-again','detail-visibility'].forEach(id => $(id).textContent = '');
+   detailBeerId = null; detailTrigger = null;
+   $('auth-password').value = ''; $('new-password-form').reset();
+ }
  const version = ++sessionVersion;
  sessionUser = user; $('app-content').hidden = true; setReady(false); beers = []; render();
  $('beer-detail').close(); $('dialog').close(); $('auth-form').hidden = !!user;
@@ -30,19 +41,20 @@ async function loadSession(user) {
  $('migrate').hidden = true;
  $('login-welcome').hidden = !!user;
  $('account-status').textContent = user ? `Tu cuenta: ${user.email}` : 'Iniciá sesión';
- $('storage-note').textContent = 'Colección privada guardada en Supabase.';
+ $('storage-note').textContent = 'Tu colección en Supabase. Solo las reseñas públicas aparecen en tu perfil.';
  if (user && BirrasCloud.isRecovering()) {
    $('account-status').textContent = 'Recuperación de contraseña';
-   $('new-password').focus();
+   $('new-password').focus(); notifyCommunity();
    return;
  }
- if (!user) return;
+ if (!user) { notifyCommunity(); return; }
  try {
    const records = await BirrasCloud.list();
    if (version !== sessionVersion) return;
    beers = records; render(); setReady(true);
    $('status').textContent = '';
  } catch { if (version === sessionVersion) $('status').textContent = 'No pudimos cargar la colección. Revisá la conexión y recargá para reintentar.'; }
+ if (version === sessionVersion) notifyCommunity();
 }
 async function init() {
  setReady(false);
@@ -68,7 +80,7 @@ function tastingState(beer) { return beer.drunk === true ? 'Probada borracho' : 
 const COMMON_STYLES = ['Rubia / Lager', 'Pilsen', 'Golden', 'IPA', 'Session IPA', 'APA', 'Roja', 'Scotch', 'Honey', 'Porter', 'Stout'];
 function displayStyle(value = '') {
  const aliases = { 'lager': 'Rubia / Lager', 'pilsner': 'Pilsen', 'golden ale': 'Golden', 'amber lager': 'Roja', 'irish red ale': 'Roja', 'irish red ale (roja)': 'Roja', 'scotch ale': 'Scotch' };
- return aliases[normalize(value)] || COMMON_STYLES.find(style => normalize(style) === normalize(value)) || value.trim();
+ return (Object.hasOwn(aliases,normalize(value)) ? aliases[normalize(value)] : '') || COMMON_STYLES.find(style => normalize(style) === normalize(value)) || value.trim();
 }
 function toggleCustomStyle() {
  const other = $('style').value === '__other__';
@@ -118,7 +130,7 @@ function statisticRows(groups, metric = 'average') {
  return groups.map(group => {
    const value = metric === 'count' ? `${group.count}` : number(group.average);
    const width = metric === 'count' ? group.count / Math.max(1, ...groups.map(g => g.count)) * 100 : group.average * 10;
-   return `<div class="insight-row"><div class="insight-row-heading"><span>${escapeHTML(group.label)}</span><strong>${value}${metric === 'average' ? '<small> / 10</small>' : '<small> birras</small>'}</strong></div><div class="insight-bar" aria-hidden="true"><span style="width:${width}%"></span></div><p>${metric === 'count' ? `Promedio ${number(group.average)} / 10` : `${group.count} ${group.count === 1 ? 'birra' : 'birras'}`}</p></div>`;
+   return `<div class="insight-row"><div class="insight-row-heading"><span>${escapeHTML(group.label)}</span><strong>${value}${metric === 'average' ? '<small> / 10</small>' : '<small> birras</small>'}</strong></div><meter class="insight-bar" min="0" max="100" value="${width}" aria-hidden="true"></meter><p>${metric === 'count' ? `Promedio ${number(group.average)} / 10` : `${group.count} ${group.count === 1 ? 'birra' : 'birras'}`}</p></div>`;
  }).join('');
 }
 function renderStatistics() {
@@ -155,7 +167,7 @@ function render() {
  let last = 1; sorted.forEach(b => { if(positions.get(b.id)) last = positions.get(b.id); else positions.set(b.id,last); });
  if($('sort').value==='recent') visible.sort((a,b) => (b.date || '').localeCompare(a.date || '') || b.createdAt-a.createdAt);
  if($('sort').value==='name') visible.sort((a,b) => `${a.brand} ${a.name}`.localeCompare(`${b.brand} ${b.name}`,'es'));
- $('ranking').innerHTML = visible.length ? visible.map(b => `<article class="beer-row" data-view="${b.id}"><span class="position ${positions.get(b.id)===1?'first':''}">${String(positions.get(b.id)).padStart(2,'0')}</span>${b.photo ? `<img class="beer-photo" src="${escapeHTML(b.photo)}" alt="${escapeHTML(`${b.brand} ${b.name}`)}">` : '<span class="beer-photo photo-placeholder">Sin foto</span>'}<div class="beer-info"><h3><button class="beer-name" type="button" data-view="${b.id}" aria-haspopup="dialog">${escapeHTML(b.brand)} · ${escapeHTML(b.name)}</button></h3><p>${escapeHTML(displayStyle(b.style || '') || 'Sin estilo indicado')} · ${escapeHTML(b.date ? new Date(b.date+'T12:00:00').toLocaleDateString('es-AR') : 'Sin fecha indicada')}</p><p class="state-badge">${tastingState(b)}</p>${b.buyAgain === true || b.buyAgain === false ? `<p class="buy-again-note">${b.buyAgain ? 'La volvería a comprar' : 'No la volvería a comprar'}</p>` : ''}${b.notes?`<p class="tasting">${escapeHTML(b.notes)}</p>`:''}</div><div class="score">${number(b.rating)}<small> / 10</small></div><div class="actions"><button data-edit="${b.id}" aria-label="Editar ${escapeHTML(b.name)}">Editar</button><button data-delete="${b.id}" aria-label="Eliminar ${escapeHTML(b.name)}">×</button></div></article>`).join('') : `<div class="empty"><div class="empty-icon" aria-hidden="true">—</div><h3>${beers.length?'Ninguna birra por acá.':'Todavía no cargaste ninguna birra.'}</h3><p>${beers.length?'Probá cambiar la búsqueda o limpiar los filtros.':'Arrancá por la que tenés en la heladera. Foto, puntaje y listo.'}</p>${beers.length?'':'<button class="primary" id="first-beer">+ Cargar mi primera birra</button>'}</div>`;
+ $('ranking').innerHTML = visible.length ? visible.map(b => `<article class="beer-row" data-view="${escapeHTML(b.id)}"><span class="position ${positions.get(b.id)===1?'first':''}">${String(positions.get(b.id)).padStart(2,'0')}</span>${window.BirrasSecurity.safePhotoUrl(b.photo) ? `<img class="beer-photo" src="${escapeHTML(window.BirrasSecurity.safePhotoUrl(b.photo))}" alt="${escapeHTML(`${b.brand} ${b.name}`)}">` : '<span class="beer-photo photo-placeholder">Sin foto</span>'}<div class="beer-info"><h3><button class="beer-name" type="button" data-view="${escapeHTML(b.id)}" aria-haspopup="dialog">${escapeHTML(b.brand)} · ${escapeHTML(b.name)}</button></h3><p>${escapeHTML(displayStyle(b.style || '') || 'Sin estilo indicado')} · ${escapeHTML(b.date ? new Date(b.date+'T12:00:00').toLocaleDateString('es-AR') : 'Sin fecha indicada')}</p><p class="state-badge">${tastingState(b)}</p><p class="visibility-badge">${b.isPublic === false ? 'Privada' : 'Pública'}</p>${b.buyAgain === true || b.buyAgain === false ? `<p class="buy-again-note">${b.buyAgain ? 'La volvería a comprar' : 'No la volvería a comprar'}</p>` : ''}${b.notes?`<p class="tasting">${escapeHTML(b.notes)}</p>`:''}</div><div class="score">${number(b.rating)}<small> / 10</small></div><div class="actions"><button data-edit="${escapeHTML(b.id)}" aria-label="Editar ${escapeHTML(b.name)}">Editar</button><button data-delete="${escapeHTML(b.id)}" aria-label="Eliminar ${escapeHTML(b.name)}">×</button></div></article>`).join('') : `<div class="empty"><div class="empty-icon" aria-hidden="true">—</div><h3>${beers.length?'Ninguna birra por acá.':'Todavía no cargaste ninguna birra.'}</h3><p>${beers.length?'Probá cambiar la búsqueda o limpiar los filtros.':'Arrancá por la que tenés en la heladera. Foto, puntaje y listo.'}</p>${beers.length?'':'<button class="primary" id="first-beer">+ Cargar mi primera birra</button>'}</div>`;
  $('first-beer')?.addEventListener('click', () => openForm());
  renderStatistics();
 }
@@ -167,9 +179,10 @@ function openDetail(id) {
  detailTrigger = document.activeElement;
  $('detail-brand').textContent = beer.brand;
  $('detail-title').textContent = beer.name;
- $('detail-photo').hidden = !beer.photo;
- $('detail-no-photo').hidden = !!beer.photo;
- if (beer.photo) $('detail-photo').src = beer.photo;
+ const detailPhoto = window.BirrasSecurity.safePhotoUrl(beer.photo);
+ $('detail-photo').hidden = !detailPhoto;
+ $('detail-no-photo').hidden = !!detailPhoto;
+ if (detailPhoto) $('detail-photo').src = detailPhoto;
  else $('detail-photo').removeAttribute('src');
  $('detail-photo').alt = `${beer.brand} ${beer.name}`;
  $('detail-score').textContent = number(beer.rating);
@@ -179,6 +192,7 @@ function openDetail(id) {
  $('detail-style').textContent = displayStyle(beer.style || '') || 'Sin estilo indicado';
  $('detail-date').textContent = beer.date ? new Date(beer.date + 'T12:00:00').toLocaleDateString('es-AR') : 'Sin indicar';
  $('detail-state').textContent = tastingState(beer);
+ $('detail-visibility').textContent = beer.isPublic === false ? 'Privada' : 'Pública';
  $('detail-buy-again').textContent = beer.buyAgain === true ? 'Sí' : beer.buyAgain === false ? 'No' : 'Sin indicar';
  $('detail-joke').textContent = tastingJoke(beer);
  $('detail-joke').hidden = beer.drunk !== true;
@@ -195,12 +209,12 @@ $('detail-edit').addEventListener('click', () => {
  $('beer-detail').close();
  if (beer && !loading) openForm(beer);
 });
-function openForm(beer) { if (loading) return; editing = beer?.id || null; currentPhoto = beer?.photo || null; photoTask = Promise.resolve(); $('beer-form').reset(); $('form-error').textContent=''; $('form-title').textContent = beer?'Editar birra':'¿Qué tomaste?'; ['brand','name','notes'].forEach(field => $(field).value=beer?.[field] || ''); setFormStyle(beer?.style || ''); $('date').value=beer ? beer.date || '' : today(); $('date').max=today(); $('drunk').value=beer?.drunk === true ? 'yes' : beer?.drunk === false ? 'no' : ''; $('buy-again').value=beer?.buyAgain === true ? 'yes' : beer?.buyAgain === false ? 'no' : ''; checkDuplicate(); $('rating').value=beer?.rating ?? ''; updateRating(); previewPhoto(); $('dialog').showModal(); }
+function openForm(beer) { if (loading) return; photoVersion++; editing = beer?.id || null; currentPhoto = beer?.photo || null; photoTask = Promise.resolve(); $('beer-form').reset(); $('form-error').textContent=''; $('form-title').textContent = beer?'Editar birra':'¿Qué tomaste?'; ['brand','name','notes'].forEach(field => $(field).value=beer?.[field] || ''); setFormStyle(beer?.style || ''); $('date').value=beer ? beer.date || '' : today(); $('date').max=today(); $('drunk').value=beer?.drunk === true ? 'yes' : beer?.drunk === false ? 'no' : ''; $('visibility').value=beer?.isPublic === false ? 'private' : 'public'; $('buy-again').value=beer?.buyAgain === true ? 'yes' : beer?.buyAgain === false ? 'no' : ''; checkDuplicate(); $('rating').value=beer?.rating ?? ''; updateRating(); previewPhoto(); $('dialog').showModal(); }
 function previewPhoto() { $('preview').hidden=!currentPhoto; $('upload-text').hidden=!!currentPhoto; if(currentPhoto) $('preview').src=currentPhoto; else $('preview').removeAttribute('src'); }
 function updateRating() { $('rating-output').innerHTML=`${$('rating').value === '' ? '—' : number(Number($('rating').value))} <small>/ 10</small>`; }
-function compress(file) { return new Promise((resolve,reject) => { const url=URL.createObjectURL(file), image=new Image(); image.onload=() => { try { const scale=Math.min(1,1200/Math.max(image.width,image.height)); const canvas=document.createElement('canvas'); canvas.width=Math.max(1,Math.round(image.width*scale)); canvas.height=Math.max(1,Math.round(image.height*scale)); canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height); resolve(canvas.toDataURL('image/jpeg',.82)); } catch(error) { reject(error); } finally { URL.revokeObjectURL(url); } }; image.onerror=() => { URL.revokeObjectURL(url); reject(new Error('No pudimos leer esa foto. Probá con JPG, PNG o WebP.')); }; image.src=url; }); }
-$('photo').addEventListener('change', () => { const file=$('photo').files[0]; if(!file) return; $('form-error').textContent=''; if(!file.type.startsWith('image/') || file.size>15*1024*1024) { $('form-error').textContent='Elegí una imagen de hasta 15 MB.'; $('photo').value=''; return; } photoTask=compress(file).then(photo => { currentPhoto=photo; previewPhoto(); }).catch(error => { $('form-error').textContent=error.message; $('photo').value=''; }); });
-$('beer-form').addEventListener('submit', async event => { event.preventDefault(); const submit=event.submitter; submit.disabled=true; setReady(false); $('logout').disabled=true; try { await photoTask; const beer={id:editing || crypto.randomUUID(),brand:$('brand').value.trim(),name:$('name').value.trim(),style:readFormStyle(),date:$('date').value || null,rating:Number($('rating').value),buyAgain:$('buy-again').value==='yes'?true:$('buy-again').value==='no'?false:null,drunk:$('drunk').value==='yes'?true:$('drunk').value==='no'?false:null,notes:$('notes').value.trim(),photo:currentPhoto,createdAt:beers.find(b=>b.id===editing)?.createdAt || Date.now()}; if(!beer.brand || !beer.name) throw new Error('Completá la marca y el nombre de la birra.'); if ($('rating').value === '' || !Number.isFinite(beer.rating) || beer.rating < 0 || beer.rating > 10) throw new Error('Poné un puntaje de 0 a 10.'); if(beer.date>today()) throw new Error('La fecha no puede ser futura.'); if(beers.some(b=>b.id!==editing && key(b)===key(beer))) throw new Error('Esta birra ya está en tu mundial. Podés editar su puntaje desde la clasificación.'); if (cloudMode) { const saved = await BirrasCloud.save(beer, beers.find(b=>b.id===beer.id)); Object.assign(beer, saved); } else { await transaction('readwrite', store=>store.put(beer)); } beers=beers.filter(b=>b.id!==beer.id).concat(beer); render(); $('dialog').close(); $('status').textContent='Birra guardada. ¡Salud!'; } catch(error) { $('form-error').textContent=error.message || 'No se pudo guardar. Revisá la conexión o el espacio del navegador.'; } finally { submit.disabled=false; setReady(!cloudMode || !!sessionUser); $('logout').disabled=false; } });
+function compress(file) { return new Promise((resolve,reject) => { const url=URL.createObjectURL(file), image=new Image(); image.onload=() => { try { if (image.width * image.height > 25000000) throw new Error('La imagen es demasiado grande. Usá una foto de hasta 25 megapíxeles.'); const scale=Math.min(1,1200/Math.max(image.width,image.height)); const canvas=document.createElement('canvas'); canvas.width=Math.max(1,Math.round(image.width*scale)); canvas.height=Math.max(1,Math.round(image.height*scale)); canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height); resolve(canvas.toDataURL('image/jpeg',.82)); } catch(error) { reject(error); } finally { URL.revokeObjectURL(url); } }; image.onerror=() => { URL.revokeObjectURL(url); reject(new Error('No pudimos leer esa foto. Probá con JPG, PNG o WebP.')); }; image.src=url; }); }
+$('photo').addEventListener('change', () => { const file=$('photo').files[0]; const selection = ++photoVersion; if(!file) return; $('form-error').textContent=''; if(!['image/jpeg','image/png','image/webp'].includes(file.type) || file.size>15*1024*1024) { $('form-error').textContent='Elegí una imagen de hasta 15 MB.'; $('photo').value=''; return; } photoTask=compress(file).then(photo => { if (selection !== photoVersion) return; currentPhoto=photo; previewPhoto(); }).catch(error => { if (selection !== photoVersion) return; $('form-error').textContent=error.message; $('photo').value=''; }); });
+$('beer-form').addEventListener('submit', async event => { event.preventDefault(); const submit=event.submitter; const savingOwner = sessionUser?.id; submit.disabled=true; setReady(false); $('logout').disabled=true; try { await photoTask; const beer={id:editing || crypto.randomUUID(),brand:$('brand').value.trim(),name:$('name').value.trim(),style:readFormStyle(),isPublic:$('visibility').value !== 'private',date:$('date').value || null,rating:Number($('rating').value),buyAgain:$('buy-again').value==='yes'?true:$('buy-again').value==='no'?false:null,drunk:$('drunk').value==='yes'?true:$('drunk').value==='no'?false:null,notes:$('notes').value.trim(),photo:currentPhoto,createdAt:beers.find(b=>b.id===editing)?.createdAt || Date.now()}; if(!beer.brand || !beer.name) throw new Error('Completá la marca y el nombre de la birra.'); if ($('rating').value === '' || !Number.isFinite(beer.rating) || beer.rating < 0 || beer.rating > 10) throw new Error('Poné un puntaje de 0 a 10.'); if(beer.date>today()) throw new Error('La fecha no puede ser futura.'); if(beers.some(b=>b.id!==editing && key(b)===key(beer))) throw new Error('Esta birra ya está en tu mundial. Podés editar su puntaje desde la clasificación.'); window.BirrasSecurity.validateBeer(beer); if (cloudMode) { const saved = await BirrasCloud.save(beer, beers.find(b=>b.id===beer.id)); Object.assign(beer, saved); } else { await transaction('readwrite', store=>store.put(beer)); } if (savingOwner !== sessionUser?.id) return; beers=beers.filter(b=>b.id!==beer.id).concat(beer); render(); $('dialog').close(); $('status').textContent='Birra guardada. ¡Salud!'; window.dispatchEvent?.(new Event('birras:reviews-changed')); } catch(error) { if (savingOwner !== sessionUser?.id) return; $('form-error').textContent=error.message || 'No se pudo guardar. Revisá la conexión o el espacio del navegador.'; } finally { submit.disabled=false; if (savingOwner === sessionUser?.id) { setReady(!cloudMode || !!sessionUser); $('logout').disabled=false; } } });
 function findDuplicate(brand, name, excludedId = null) {
  if (!brand.trim() || !name.trim()) return null;
  return beers.find(beer => beer.id !== excludedId && key(beer) === key({brand,name})) || null;
@@ -230,7 +244,7 @@ $('ranking').addEventListener('click', async event => {
    if (cloudMode) await BirrasCloud.remove(beer);
    else await transaction('readwrite', store => store.delete(beer.id));
    beers = beers.filter(item => item.id !== beer.id); render();
-   $('status').textContent = 'Birra eliminada.';
+   $('status').textContent = 'Birra eliminada.'; window.dispatchEvent?.(new Event('birras:reviews-changed'));
  } catch { $('status').textContent = 'No se pudo eliminar la birra. Intentá de nuevo.'; }
  finally { setReady(!cloudMode || !!sessionUser); $('logout').disabled = false; }
 });
@@ -251,13 +265,15 @@ $('auth-form').addEventListener('submit', async event => {
  $('auth-message').textContent = '';
  try {
    const email = $('auth-email').value.trim(), password = $('auth-password').value;
+   if (event.submitter?.name === 'signup' && password.length < 8) { $('auth-message').textContent = 'Usá al menos 8 caracteres para crear tu cuenta.'; return; }
+   const captchaToken = window.BirrasCaptcha.token('auth-form');
    if (event.submitter?.name === 'signup') {
-     const result = await BirrasCloud.signup(email,password);
+     const result = await BirrasCloud.signup(email,password,captchaToken);
      $('auth-message').textContent = result.session ? 'Cuenta creada.' : 'Revisá tu email para confirmar la cuenta. Después volvé e iniciá sesión.';
-   } else await BirrasCloud.login(email,password);
+   } else await BirrasCloud.login(email,password,captchaToken);
    $('auth-password').value = '';
  } catch { $('auth-message').textContent = 'No se pudo completar. Revisá email, contraseña y confirmación del correo; si acabás de intentarlo, esperá un momento.'; }
- finally { buttons.forEach(b => b.disabled = false); }
+ finally { window.BirrasCaptcha.reset('auth-form'); buttons.forEach(b => b.disabled = false); }
 });
 $('forgot-password').addEventListener('click', () => {
  $('auth-form').hidden = true;
@@ -277,11 +293,11 @@ $('reset-request-form').addEventListener('submit', async event => {
  const button = event.submitter; button.disabled = true;
  $('auth-message').textContent = 'Enviando enlace...';
  try {
-   await BirrasCloud.requestPasswordReset($('reset-email').value.trim());
+   await BirrasCloud.requestPasswordReset($('reset-email').value.trim(), window.BirrasCaptcha.token('reset-request-form'));
    $('auth-message').textContent = 'Si existe una cuenta con ese email, vas a recibir un enlace para cambiar la contraseña. Revisá también spam.';
  } catch {
    $('auth-message').textContent = 'No pudimos enviar el enlace. Revisá tu conexión; si ya pediste uno, esperá unos minutos antes de reintentar.';
- } finally { button.disabled = false; }
+ } finally { window.BirrasCaptcha.reset('reset-request-form'); button.disabled = false; }
 });
 $('new-password-form').addEventListener('submit', async event => {
  event.preventDefault();
@@ -324,8 +340,8 @@ $('migrate').addEventListener('click', async () => {
  } catch { render(); $('auth-message').textContent = `Se copiaron ${copied} birras antes del error. Revisá la conexión y reintentá: las ya copiadas se omiten.`; }
  finally { setReady(true); $('migrate').disabled = false; $('logout').disabled = false; }
 });
-// Renueva los enlaces privados de fotos al volver a la app o tras 50 minutos.
-setInterval(() => { if (cloudMode && sessionUser && !loading && !$('dialog').open && !$('beer-detail').open) loadSession(sessionUser); }, 50*60*1000);
+// Renueva los enlaces privados de fotos al volver a la app o tras 4 minutos.
+setInterval(() => { if (cloudMode && sessionUser && !loading && !$('dialog').open && !$('beer-detail').open) loadSession(sessionUser); }, 4*60*1000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && cloudMode && sessionUser && !loading && !$('dialog').open && !$('beer-detail').open) loadSession(sessionUser); });
 $('style').addEventListener('change', () => { toggleCustomStyle(); if (!$('custom-style').disabled) $('custom-style').focus(); });
 $('filter-style').addEventListener('change', render);

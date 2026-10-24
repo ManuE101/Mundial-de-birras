@@ -16,53 +16,56 @@ async function setup({ failWrite = false, resetError = null, updateError = null,
     insert: row => { writes.push(row); return query; },
     update: row => { writes.push(row); return query; },
     eq: () => query, is: () => query, select: () => query,
-    single: async () => failWrite ? { error: { code: '23505' } } : { data: { id: 'beer-id' } }
+    single: async () => failWrite ? { error: { code: '23505' } } : { data: { id: '11111111-1111-4111-8111-111111111111' } }
   };
   const client = {
     auth: {
       onAuthStateChange(callback) { authCallback = callback; },
-      getSession: async () => ({ data: { session: { user: { id: 'owner-id' } } } }),
+      getSession: async () => ({ data: { session: { user: { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' } } } }),
       resetPasswordForEmail: async (email, options) => { resets.push({ email, options }); return { data: {}, error: resetError }; },
       updateUser: async data => { updates.push(data); return { data: {}, error: updateError }; }
     },
     storage: { from: () => storage }, from: () => query
   };
   const context = { window: { location: { origin: 'https://birras.example', hash: recoveryHash }, BIRRAS_CONFIG: { supabaseUrl: 'https://example.supabase.co', supabasePublishableKey: 'sb_publishable_test' } },
-    fakeSDK: { createClient: () => client }, crypto: { randomUUID: () => 'photo-id' }, fetch, setTimeout, atob, URLSearchParams };
-  const source = fs.readFileSync('cloud.js', 'utf8').replace(/await import\('[^']+'\)/, 'fakeSDK');
+     crypto: { randomUUID: () => 'photo-id' }, fetch, setTimeout, atob, URLSearchParams, Blob, URL, Uint8Array };
+  context.window.supabase = { createClient: () => client };
+  vm.runInNewContext(fs.readFileSync('security.js', 'utf8'), context);
+  const source = fs.readFileSync('cloud.js', 'utf8');
   vm.runInNewContext(source, context);
   const cloud = context.window.BirrasCloud;
   await cloud.init(() => {}, value => notifications.push(value));
   return { cloud, uploads, removals, writes, resets, updates, notifications, emit: (event, session) => authCallback(event, session) };
 }
-const beer = { id: 'beer-id', brand: 'Marca', name: 'Variedad', style: '', date: '2026-10-21', rating: 0,
-  drunk: false, buyAgain: false, notes: '', photo: 'data:image/jpeg;base64,/9j/', createdAt: 1792540800000 };
+const beer = { id: '11111111-1111-4111-8111-111111111111', brand: 'Marca', name: 'Variedad', style: '', date: '2026-10-21', rating: 0,
+  drunk: false, buyAgain: false, notes: '', photo: 'data:image/jpeg;base64,/9j/2Q==', createdAt: 1792540800000 };
 
 test('saves zero ratings and false drunk state with the authenticated owner', async () => {
   const { cloud, uploads, writes } = await setup();
   const saved = await cloud.save(beer);
-  assert.equal(uploads[0].path, 'owner-id/photo-id.jpg');
-  assert.equal(writes[0].user_id, 'owner-id');
+  assert.equal(uploads[0].path, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/photo-id.jpg');
+  assert.equal(writes[0].user_id, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
   assert.equal(writes[0].rating, 0);
   assert.equal(writes[0].drunk, false);
   assert.equal(writes[0].buy_again, false);
-  assert.equal(saved.photoPath, 'owner-id/photo-id.jpg');
+  assert.equal(writes[0].is_public, true);
+  assert.equal(saved.photoPath, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/photo-id.jpg');
 });
 test('duplicate rejection cleans up the uploaded photo', async () => {
   const { cloud, removals } = await setup({ failWrite: true });
   await assert.rejects(cloud.save(beer), /ya están/);
-  assert.equal(removals[0], 'owner-id/photo-id.jpg');
+  assert.equal(removals[0], 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/photo-id.jpg');
 });
 test('editing without a new photo preserves the private storage path', async () => {
   const { cloud, uploads, writes } = await setup();
-  await cloud.save({ ...beer, photo: 'https://example/photo?signed=temporary' }, { photoPath: 'owner-id/original.jpg' });
+  await cloud.save({ ...beer, photo: 'https://example/photo?signed=temporary' }, { photoPath: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/original.jpg' });
   assert.equal(uploads.length, 0);
-  assert.equal(writes[0].photo_path, 'owner-id/original.jpg');
+  assert.equal(writes[0].photo_path, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/original.jpg');
 });
 test('replacing a photo removes the previous file after saving', async () => {
   const { cloud, removals } = await setup();
-  await cloud.save(beer, { photoPath: 'owner-id/original.jpg' });
-  assert.equal(removals[0], 'owner-id/original.jpg');
+  await cloud.save(beer, { photoPath: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/original.jpg' });
+  assert.equal(removals[0], 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/original.jpg');
 });
 
 test('password reset email redirects to the app origin', async () => {
@@ -73,7 +76,7 @@ test('password reset email redirects to the app origin', async () => {
 });
 test('recovery event is handled even for the already signed-in user', async () => {
   const { cloud, emit, notifications } = await setup();
-  emit('PASSWORD_RECOVERY', { user: { id: 'owner-id' } });
+  emit('PASSWORD_RECOVERY', { user: { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' } });
   await new Promise(resolve => setTimeout(resolve, 5));
   assert.equal(cloud.isRecovering(), true);
   assert.equal(notifications.length, 1);
@@ -99,9 +102,9 @@ test('reset email delivery errors are surfaced to the UI', async () => {
 
 test('confirmed deletion deletes the record and then its photo', async () => {
   const { cloud, writes, removals } = await setup();
-  await cloud.remove({ ...beer, photoPath: 'owner-id/original.jpg' });
+  await cloud.remove({ ...beer, photoPath: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/original.jpg' });
   assert.equal(writes[0].operation, 'delete');
-  assert.equal(removals[0], 'owner-id/original.jpg');
+  assert.equal(removals[0], 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/original.jpg');
 });
 
 test('older records leave the buy-again answer unspecified', async () => {
@@ -119,5 +122,11 @@ test('a beer can be saved without a photo or date while keeping its zero score',
   assert.equal(writes[0].rating, 0);
   assert.equal(uploads.length, 0);
   assert.equal(saved.photoPath, null);
+});
+
+test('private visibility is explicitly persisted without being converted to the default', async () => {
+  const {cloud,writes}=await setup();
+  await cloud.save({...beer,isPublic:false,photo:null});
+  assert.equal(writes[0].is_public,false);
 });
 

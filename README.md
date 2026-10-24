@@ -1,5 +1,15 @@
 # Mundial de birras
 
+## Perfiles y reseñas públicas
+
+Implementados Comunidad, perfil público, nombre único editable, foto opcional y visibilidad Pública/Privada al cargar o editar. Para activar ejecutar `supabase/005-public-profiles.sql` y verificar con `supabase/public-profiles-check.sql` antes de publicar. **La migración vuelve públicas todas las reseñas actuales**, según lo acordado. Detalle de permisos, cambios de visibilidad y pruebas en `PROFILES.md`.
+
+## Refuerzo de seguridad
+
+Ver `SECURITY.md` para aplicar `supabase/004-security.sql`, comprobar aislamiento con `supabase/security-check.sql` y configurar Turnstile. El código de CAPTCHA está preparado pero no se activa hasta completar la site key y el panel Supabase. No se habilitó contenido público.
+
+El SDK Supabase ahora está fijado en `package-lock.json` y se sirve desde `vendor/`, con SRI y cabeceras CSP generadas para Netlify. Para preparar desde otra máquina: `npm ci --ignore-scripts`, `npm run prepare:deploy`, `npm test`. `dist` incluye `_headers` y el SDK; subir la carpeta completa al proyecto existente. El servidor Python de desarrollo no aplica esas cabeceras.
+
 ## Campos obligatorios y opcionales
 
 Obligatorios: marca, nombre de la cerveza y puntaje de 0 a 10. El puntaje se ingresa explícitamente, sin un valor precargado; cero es válido. Foto, estilo, fecha, estado, recompra y notas son opcionales. **Otro** no exige escribir un estilo. La fecha propone hoy al crear, pero puede borrarse; al editar se conserva una fecha vacía. Marca + nombre siguen identificando duplicados, independientemente del estilo.
@@ -99,3 +109,7 @@ Comprobar el acceso y la persistencia con `node --test tests/access.test.cjs tes
 Cada degustación permite indicar si la probaste borracho: Sí, No o Sin indicar. Se muestra en la clasificación y se incluye en el respaldo. Los registros anteriores quedan sin indicar hasta que se editen. El estado no modifica el puntaje ni permite repetir una cerveza.
 
 Los nombres anteriores se traducen al mostrar, filtrar y editar: Lager a Rubia / Lager, Pilsner a Pilsen, Golden Ale a Golden, Amber Lager e Irish Red Ale a Roja, y Scotch Ale a Scotch. Los registros guardados se conservan; al editar y guardar se usa el nombre nuevo.
+
+## Catálogo compartido
+
+Para activar el catálogo global y las listas públicas Por probar, aplicar `supabase/006-catalog.sql` después de 005 y publicar `dist`. Reglas, límites y comprobaciones en [CATALOG.md](CATALOG.md).
